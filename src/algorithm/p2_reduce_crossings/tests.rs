@@ -342,7 +342,7 @@ mod order {
         graph.add_edge(n2, s0, Edge::default());
 
         let order = Order::new(vec![vec![n0, n1, n2], vec![s0, s1]]);
-        assert_eq!(order.bilayer_cross_count(&graph, 0), 2);
+        assert_eq!(order.bilayer_cross_count(&graph, 0, 1), 2);
     }
 
     #[test]
@@ -364,7 +364,7 @@ mod order {
 
         let order = Order::new(vec![vec![n0, n1, n2, n3], vec![s0, s1, s2, s3]]);
 
-        assert_eq!(order.bilayer_cross_count(&graph, 0), 6);
+        assert_eq!(order.bilayer_cross_count(&graph, 0, 1), 6);
     }
 
     #[test]

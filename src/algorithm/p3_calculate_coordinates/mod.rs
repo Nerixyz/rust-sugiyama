@@ -16,7 +16,7 @@ pub(super) fn create_layouts(
 ) -> Vec<HashMap<NodeIndex, f64>> {
     info!(target: "coordinate_calculation", "Creating individual layouts for coordinate calculation");
     let mut layouts = Vec::new();
-    mark_type_1_conflicts(graph, layers);
+    // mark_type_1_conflicts(graph, layers);
     // calculate the coordinates for each direction
     for _v_dir in [VDir::Down, VDir::Up] {
         for h_dir in [HDir::Right, HDir::Left] {
@@ -87,7 +87,7 @@ pub(crate) fn align_to_smallest_width_layout(aligned_layouts: &mut [HashMap<Node
 
 pub(crate) fn calculate_relative_coords(
     aligned_layouts: Vec<HashMap<NodeIndex, f64>>,
-) -> Vec<(NodeIndex, f64)> {
+) -> HashMap<NodeIndex, f64> {
     info!(target: "coordinate_calculation", 
         "Calculate relative coordinates, by taking average between two medians of absolute x-coordinates for each layout direction");
     // sort all 4 coordinates per vertex in ascending order
@@ -115,7 +115,7 @@ pub(crate) fn calculate_relative_coords(
         .into_iter()
         // "the average median is both order and separation preserving" [Brandes & Kopf, 2001]
         .map(|(k, v)| (*k, (v[1] + v[2]) / 2.0))
-        .collect::<Vec<_>>()
+        .collect::<_>()
 }
 
 fn is_incident_to_inner_segment(graph: &StableDiGraph<Vertex, Edge>, id: NodeIndex) -> bool {

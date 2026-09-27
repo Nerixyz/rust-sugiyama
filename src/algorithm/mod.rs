@@ -121,7 +121,7 @@ fn init_graph(graph: &mut StableDiGraph<Vertex, Edge>) {
     }
 }
 
-fn build_layout(mut graph: StableDiGraph<Vertex, Edge>, config: &Config) -> Layout {
+fn build_layout(mut graph: StableDiGraph<Vertex, Edge>, config: &Config) -> Layout<usize> {
     info!(target: "layouting", "Start building layout");
     info!(target: "layouting", "Configuration is: {:?}", config);
 
@@ -154,8 +154,8 @@ fn build_layout(mut graph: StableDiGraph<Vertex, Edge>, config: &Config) -> Layo
     let layout = execute_phase_3(&mut graph, layers);
     debug!(target: "layouting", "Coordinates: {:?}\nwidth: {}, height:{}",
         layout.0,
-        layout.1,
-        layout.2
+        layout.2,
+        layout.3
     );
     layout
 }
@@ -204,7 +204,7 @@ fn execute_phase_2(
 fn execute_phase_3(
     graph: &mut StableDiGraph<Vertex, Edge>,
     mut layers: Vec<Vec<NodeIndex>>,
-) -> Layout {
+) -> Layout<usize> {
     info!(target: "layouting", "Executing phase 3: Coordinate Calculation");
     for n in graph.node_indices().collect::<Vec<_>>() {
         if graph[n].is_dummy {
@@ -219,13 +219,13 @@ fn execute_phase_3(
     let mut x_coordinates = p3::calculate_relative_coords(layouts);
     // determine the smallest x-coordinate
     let min = x_coordinates
-        .iter()
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .unwrap()
-        .1;
+        .values()
+        .copied()
+        .min_by(|a, b| a.total_cmp(&b))
+        .unwrap();
 
     // shift all coordinates so the minimum coordinate is 0
-    for (_, c) in &mut x_coordinates {
+    for c in x_coordinates.values_mut() {
         *c -= min;
     }
 
@@ -248,9 +248,35 @@ fn execute_phase_3(
         // spacing.
         current_rank_top_offset += max_height;
     }
+    let x_for_ix = |ix: NodeIndex| -> f64 { *x_coordinates.get(&ix).unwrap() };
+    let y_for_rank = |rnk: i32| -> f64 { *rank_to_y_offset.get(&rnk).unwrap() };
 
-    let mut v = x_coordinates.iter().collect::<Vec<_>>();
-    v.sort_by(|a, b| a.0.index().cmp(&b.0.index()));
+    let mut edges = Vec::new();
+    for (&start_idx, &start_x) in &x_coordinates {
+        let start_v = &graph[start_idx];
+        if start_v.is_dummy {
+            continue;
+        }
+        for child in graph.neighbors_directed(start_idx, petgraph::Direction::Outgoing) {
+            let mut points = Vec::new();
+            points.push((start_x, y_for_rank(start_v.rank)));
+            let mut ix = child;
+            let mut it = &graph[ix];
+            loop {
+                points.push((x_for_ix(ix), y_for_rank(it.rank)));
+                if !it.is_dummy {
+                    break;
+                }
+                ix = graph
+                    .neighbors_directed(ix, petgraph::Direction::Outgoing)
+                    .next()
+                    .unwrap();
+                it = &graph[ix];
+            }
+            edges.push(((graph[start_idx].id, it.id), points));
+        }
+    }
+
     // format to NodeIndex: (x, y), width, height
     (
         x_coordinates
@@ -264,6 +290,7 @@ fn execute_phase_3(
                 )
             })
             .collect::<Vec<_>>(),
+        edges,
         width,
         height,
     )
@@ -358,7 +385,7 @@ fn is_valid_layout() {
 
     let layouts = start(graph, &Config::default());
 
-    for (positions, _, _) in layouts {
+    for (positions, _, _, _) in layouts {
         assert!(layout_is_valid(&positions));
     }
 }

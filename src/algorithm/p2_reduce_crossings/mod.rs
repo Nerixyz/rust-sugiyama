@@ -103,15 +103,19 @@ impl Order {
     fn crossings(&self, graph: &StableDiGraph<Vertex, Edge>) -> usize {
         let mut cross_count = 0;
         for rank in 0..self.max_rank() - 1 {
-            cross_count += self.bilayer_cross_count(graph, rank);
+            cross_count += self.bilayer_cross_count(graph, rank, 1);
+            cross_count += self.bilayer_cross_count(graph, rank, -1);
         }
         cross_count
     }
 
-    fn bilayer_cross_count(&self, graph: &StableDiGraph<Vertex, Edge>, rank: usize) -> usize {
+    fn bilayer_cross_count(&self, graph: &StableDiGraph<Vertex, Edge>, rank: usize, dir: i32) -> usize {
         // find initial edge order
-        let north = &self[rank];
-        let south = &self[rank + 1];
+        let (north, south) = if dir > 0 {
+            (&self[rank], &self[rank+1])
+        } else {
+            (&self[rank+1], &self[rank])
+        };
         let mut len = south.len();
         let mut key_length = 0;
         while len > 0 {
@@ -124,7 +128,12 @@ impl Order {
                 radix_sort(
                     graph
                         .neighbors_directed(*v, Outgoing)
-                        .filter(|n| graph[*v].rank.abs_diff(graph[*n].rank) == 1)
+                        .filter(|n| {
+                            let diff = 
+                            graph[*n].rank - graph[*v].rank;
+                            // debug!("diff={diff}");
+                            diff == dir
+            })
                         .filter_map(|n| self.positions.get(&n))
                         .copied()
                         .collect(),

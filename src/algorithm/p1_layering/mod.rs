@@ -15,9 +15,12 @@ pub(super) mod ranking;
 #[cfg(test)]
 pub(crate) mod tests;
 
+use std::collections::{HashSet, VecDeque};
+
 use log::info;
-use petgraph::stable_graph::{EdgeIndex, StableDiGraph};
-use petgraph::visit::IntoNodeIdentifiers;
+use petgraph::stable_graph::{EdgeIndex, NodeIndex, StableDiGraph};
+use petgraph::visit::{EdgeRef, IntoNodeIdentifiers};
+use petgraph::Direction::Outgoing;
 
 use crate::configure::RankingType;
 
@@ -39,6 +42,7 @@ pub(super) fn rank(
         RankingType::MinimizeEdgeLength => minimize_edge_length(graph, minimum_length),
         RankingType::Up => move_vertices_up(graph, minimum_length),
         RankingType::Down => move_vertices_down(graph, minimum_length),
+        RankingType::Mine => my_ranking(graph),
     }
 }
 
@@ -58,6 +62,83 @@ fn minimize_edge_length(graph: &mut StableDiGraph<Vertex, Edge>, minimum_length:
 fn original(graph: &mut StableDiGraph<Vertex, Edge>, minimum_length: i32) {
     move_vertices_up(graph, minimum_length);
     move_vertices_down(graph, minimum_length);
+}
+
+fn my_ranking(graph: &mut StableDiGraph<Vertex, Edge>) {
+    let mut starts = Vec::new();
+    for node in graph.node_indices() {
+        if graph
+            .edges_directed(node, petgraph::Direction::Incoming)
+            .next()
+            .is_none()
+        {
+            starts.push(node);
+        }
+    }
+    let mut visited = HashSet::new();
+    enum Item {
+        Ix(NodeIndex),
+        RankSep,
+    }
+    let mut work = VecDeque::from_iter(starts.iter().cloned().map(Item::Ix));
+    work.push_back(Item::RankSep);
+    let mut rank = 0;
+    const PER_LAYER: i32 = 4;
+    while let Some(item) = work.pop_front() {
+        match item {
+            Item::Ix(ix) => {
+                if !visited.insert(ix) {
+                    continue;
+                }
+                graph[ix].rank = rank;
+                for dst in graph.edges_directed(ix, Outgoing) {
+                    work.push_back(Item::Ix(dst.target()));
+                }
+            }
+            Item::RankSep => {
+                if !work.is_empty() {
+                    rank += PER_LAYER;
+                    work.push_back(Item::RankSep);
+                }
+            }
+        }
+    }
+
+    // Push down
+    enum PushItem {
+        Ix(NodeIndex, bool),
+        RankSep,
+    }
+    for i in 0..2 {
+        visited.clear();
+        let mut work =
+            VecDeque::from_iter(starts.iter().cloned().map(|it| PushItem::Ix(it, false)));
+        work.push_back(PushItem::RankSep);
+        while let Some(item) = work.pop_front() {
+            match item {
+                PushItem::Ix(ix, push) => {
+                    let my_rank = &mut graph[ix].rank;
+                    if push && *my_rank % PER_LAYER == i {
+                        *my_rank += 1;
+                    }
+                    if !visited.insert(ix) {
+                        continue;
+                    }
+                    let my_rank = *my_rank;
+                    for dst in graph.edges_directed(ix, Outgoing) {
+                        let dst = dst.target();
+                        let dst_rnk = graph[dst].rank;
+                        work.push_back(PushItem::Ix(dst, dst_rnk <= my_rank));
+                    }
+                }
+                PushItem::RankSep => {
+                    if !work.is_empty() {
+                        work.push_back(PushItem::RankSep);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn leave_edge(graph: &StableDiGraph<Vertex, Edge>) -> Option<EdgeIndex> {

@@ -139,6 +139,8 @@ pub enum RankingType {
     Up,
     /// Move vertices as far down as possible
     Down,
+    /// The best one.
+    Mine,
 }
 
 impl TryFrom<String> for RankingType {
@@ -162,6 +164,7 @@ impl From<RankingType> for &'static str {
             RankingType::Down => "down",
             RankingType::Original => "original",
             RankingType::MinimizeEdgeLength => "minimize",
+            RankingType::Mine => "this one",
         }
     }
 }
